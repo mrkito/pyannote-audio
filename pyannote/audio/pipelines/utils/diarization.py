@@ -28,10 +28,9 @@ from pyannote.core.utils.types import Label
 from pyannote.metrics.diarization import DiarizationErrorRate
 
 from pyannote.audio.core.inference import Inference
-from pyannote.audio.utils.signal import Binarize, binarize
+from pyannote.audio.utils.signal import Binarize
 
 
-# TODO: move to dedicated module
 class SpeakerDiarizationMixin:
     """Defines a bunch of methods common to speaker diarization pipelines"""
 
