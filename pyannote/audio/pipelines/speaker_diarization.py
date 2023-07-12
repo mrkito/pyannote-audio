@@ -26,6 +26,7 @@ import functools
 import itertools
 import math
 import warnings
+from copy import copy
 from typing import Callable, Optional, Text, Union
 
 import numpy as np
@@ -221,7 +222,7 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
                 segmentations = self._segmentation(file, hook=hook)
                 file[self.CACHED_SEGMENTATION] = segmentations
         else:
-            segmentations: SlidingWindowFeature = self._segmentation(file, hook=hook)
+            segmentations: SlidingWindowFeature = self._segmentation(file,hook=hook)
 
         return segmentations
 
@@ -229,6 +230,7 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
         self,
         file,
         binary_segmentations: SlidingWindowFeature,
+        feats: SlidingWindowFeature= None,
         exclude_overlap: bool = False,
         hook: Optional[Callable] = None,
     ):
@@ -239,6 +241,8 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
         file : AudioFile
         binary_segmentations : (num_chunks, num_frames, num_speakers) SlidingWindowFeature
             Binarized segmentation.
+        feats : (num_chunks, num_frames, feats) SlidingWindowFeature
+            segmentation features.
         exclude_overlap : bool, optional
             Exclude overlapping speech regions when extracting embeddings.
             In case non-overlapping speech is too short, use the whole speech.
@@ -292,20 +296,25 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
                 binary_segmentations.data, binary_segmentations.sliding_window
             )
 
-        def iter_waveform_and_mask():
-            for (chunk, masks), (_, clean_masks) in zip(
-                binary_segmentations, clean_segmentations
-            ):
+        def iter_waveform_or_feats_and_mask(segmentations, waveform_mode=True):
+            """
+
+            :param segmentations: wavs or feats
+            :param waveform_mode: if True  out=wav_crops else feats
+            """
+            for indx, ((chunk, masks), (_, clean_masks)) in enumerate(zip(segmentations, clean_segmentations)):
                 # chunk: Segment(t, t + duration)
                 # masks: (num_frames, local_num_speakers) np.ndarray
-
-                waveform, _ = self._audio.crop(
-                    file,
-                    chunk,
-                    duration=duration,
-                    mode="pad",
-                )
-                # waveform: (1, num_samples) torch.Tensor
+                if waveform_mode:
+                    waveform, _ = self._audio.crop(
+                        file,
+                        chunk,
+                        duration=duration,
+                        mode="pad",
+                    )
+                    # waveform: (1, num_samples) torch.Tensor
+                else:
+                    waveform = torch.tensor(masks)
 
                 # mask may contain NaN (in case of partial stitching)
                 masks = np.nan_to_num(masks, nan=0.0).astype(np.float32)
@@ -323,11 +332,20 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
                     # w: (1, 1, num_samples) torch.Tensor
                     # m: (1, num_frames) torch.Tensor
 
-        batches = batchify(
-            iter_waveform_and_mask(),
-            batch_size=self.embedding_batch_size,
-            fillvalue=(None, None),
-        )
+        if feats:
+
+            batches = batchify(
+                iter_waveform_or_feats_and_mask(feats, False),
+                batch_size=self.embedding_batch_size,
+                fillvalue=(None, None),
+            )
+        else:
+
+            batches = batchify(
+                iter_waveform_or_feats_and_mask(binary_segmentations),
+                batch_size=self.embedding_batch_size,
+                fillvalue=(None, None),
+            )
 
         batch_count = math.ceil(num_chunks * num_speakers / self.embedding_batch_size)
 
@@ -342,9 +360,7 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
             mask_batch = torch.vstack(masks)
             # (batch_size, num_frames) torch.Tensor
 
-            embedding_batch: np.ndarray = self._embedding(
-                waveform_batch, masks=mask_batch
-            )
+            embedding_batch: np.ndarray = self._embedding(waveform_batch, masks=mask_batch)
             # (batch_size, dimension) np.ndarray
 
             embedding_batches.append(embedding_batch)
@@ -473,6 +489,13 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
         )
 
         segmentations = self.get_segmentations(file, hook=hook)
+        # unde
+        segmentations_classes = self._inferences['_segmentation'].model.classifier.out_features
+        if segmentations_classes < segmentations.data.shape[-1]:
+            feats = copy(segmentations)
+            feats.data = segmentations.data[:, :, segmentations_classes:]
+            segmentations.data = segmentations.data[:, :, :segmentations_classes]
+
         hook("segmentation", segmentations)
         #   shape: (num_chunks, num_frames, local_num_speakers)
 
@@ -511,6 +534,7 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
             embeddings = self.get_embeddings(
                 file,
                 binarized_segmentations,
+                feats,
                 exclude_overlap=self.embedding_exclude_overlap,
                 hook=hook,
             )
