@@ -309,8 +309,9 @@ class SpeechBrainPretrainedSpeakerEmbedding(BaseInference):
         return upper
 
     def __call__(
-        self, waveforms: torch.Tensor, masks: torch.Tensor = None
-    ) -> np.ndarray:
+            self,
+            waveforms: torch.Tensor,
+            masks: torch.Tensor = None) -> np.ndarray:
         """
 
         Parameters
@@ -381,11 +382,12 @@ class WavLMPretrainedSpeakerEmbedding(BaseInference):
     """WavLM-based pretrained speaker embedding
 
     """
+
     def __init__(
-        self,
-        embedding: Text = "microsoft/wavlm-base-plus-sv",
-        device: torch.device = None,
-        use_auth_token: Union[Text, None] = None,
+            self,
+            embedding: Text = "microsoft/wavlm-base-plus-sv",
+            device: torch.device = None,
+            use_auth_token: Union[Text, None] = None,
     ):
         if not TRANSFORMERS_IS_AVAILABLE:
             raise ImportError(
@@ -399,7 +401,7 @@ class WavLMPretrainedSpeakerEmbedding(BaseInference):
         self.device = device or torch.device("cpu")
         self.use_auth_token = use_auth_token
 
-        self.feature_extractor_ = AutoFeatureExtractor.from_pretrained(self.embedding, use_auth_token=self.use_auth_token)
+        self.feature_extractor_ = AutoFeatureExtractor.from_pretrained(self.embedding,                                                       use_auth_token=self.use_auth_token)
         self.model_ = WavLMForXVector.from_pretrained(self.embedding, use_auth_token=self.use_auth_token)
 
     def to(self, device: torch.device):
@@ -409,16 +411,12 @@ class WavLMPretrainedSpeakerEmbedding(BaseInference):
 
     def _encode_batch(self, batch, masks=None):
         with torch.no_grad():
-            if isinstance(batch, torch.Tensor):
-                if masks is None:
-                    masks = torch.ones_like(batch, dtype=torch.int32)
+            if len(batch.shape) == 2:
+                batch = self.feature_extractor_(batch)
+            batch = batch.transpose(-2, -1)
+            print(batch.shape)
 
-                inputs = dict(input_values=batch, attention_mask=masks)
-            else:
-                inputs = self.feature_extractor_(batch, sampling_rate=self.sample_rate, return_tensors="pt", padding=True)
-
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-            embeddings = self.model_(**inputs).embeddings
+            embeddings = self.model_(batch)
             embeddings = F.normalize(embeddings, dim=-1)
             return embeddings
 
@@ -451,7 +449,10 @@ class WavLMPretrainedSpeakerEmbedding(BaseInference):
 
 
     def __call__(
-        self, waveforms: torch.Tensor, masks: torch.Tensor = None
+            self,
+            waveforms: torch.Tensor,
+            masks: torch.Tensor = None,
+            wav_mode: bool = True
     ) -> np.ndarray:
         """
 
@@ -467,35 +468,34 @@ class WavLMPretrainedSpeakerEmbedding(BaseInference):
 
         """
 
-        batch_size, num_channels, num_samples = waveforms.shape
-        assert num_channels == 1
 
-        waveforms = waveforms.squeeze(dim=1)
-        if masks is None:
-            wav_lens = waveforms.shape[1] * torch.ones(batch_size)
-            imasks = None
-
-        else:
-            batch_size_masks, _ = masks.shape
-            assert batch_size == batch_size_masks
-
-            imasks = F.interpolate(
-                masks.unsqueeze(dim=1), size=num_samples, mode="nearest"
-            ).squeeze(dim=1)
-
-            imasks = imasks > 0.5
-
-            wav_lens = imasks.sum(dim=1)
-
-        max_len = wav_lens.max()
-
-        # corner case: every signal is too short
-        if max_len < self.min_num_samples:
-            return np.NAN * np.zeros((batch_size, self.dimension))
-
-        too_short = wav_lens < self.min_num_samples
-        wav_lens = wav_lens / max_len
-        wav_lens[too_short] = 1.0
+        # if wav_mode :
+        #     batch_size, num_channels, num_samples = waveforms.shape
+        #
+        #     assert num_channels == 1
+        #
+        #     waveforms = waveforms.squeeze(dim=1)
+        #     if masks is None:
+        #         wav_lens = waveforms.shape[1] * torch.ones(batch_size)
+        #         imasks = None
+        #
+        #     else:
+        #         batch_size_masks, _ = masks.shape
+        #         assert batch_size == batch_size_masks
+        #
+        #         imasks = F.interpolate(
+        #             masks.unsqueeze(dim=1), size=num_samples, mode="nearest"
+        #         ).squeeze(dim=1)
+        #
+        #         imasks = imasks > 0.5
+        #
+        #         wav_lens = imasks.sum(dim=1)
+        # else:
+        #
+        #     batch_size, _, _ = waveforms.shape
+        #
+        imasks = masks > 0.5
+        # wav_lens = imasks.sum(dim=1)
 
         embeddings = (
             # WavLM feature extractor will pad signals internally
@@ -505,8 +505,6 @@ class WavLMPretrainedSpeakerEmbedding(BaseInference):
             .cpu()
             .numpy()
         )
-
-        embeddings[too_short.cpu().numpy()] = np.NAN
 
         return embeddings
 
