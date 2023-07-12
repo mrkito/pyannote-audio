@@ -5,8 +5,7 @@ import torch
 from transformers import WavLMConfig, WavLMModel
 from pyannote.audio.pipelines.speaker_verification import PretrainedSpeakerEmbedding
 
-from pyannote.audio.models.segmentation.ecapa_tdnn import ECAPA_TDNN_SMALL
-from pyannote.audio.pipelines import SpeakerDiarization
+from pyannote.audio.models.embedding.ecapa_tdnn import ECAPA_TDNN_SMALL
 from pyannote.audio.models.segmentation import PyanNetWavLM
 
 # load weight
