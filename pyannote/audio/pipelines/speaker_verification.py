@@ -412,9 +412,9 @@ class WavLMPretrainedSpeakerEmbedding(BaseInference):
     def _encode_batch(self, batch, masks=None):
         with torch.no_grad():
             if len(batch.shape) == 2:
+                # if input - wav
                 batch = self.feature_extractor_(batch)
             batch = batch.transpose(-2, -1)
-            print(batch.shape)
 
             embeddings = self.model_(batch)
             embeddings = F.normalize(embeddings, dim=-1)
