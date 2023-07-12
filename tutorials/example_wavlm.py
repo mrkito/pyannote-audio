@@ -26,12 +26,15 @@ segmentation_inference = Inference(
     skip_aggregation=True,
     batch_size=4,
 )
-# Init  embedding model
+# Init def embedding model
 
 embedding = "microsoft/wavlm-base-plus-sv"
 embedding_model = PretrainedSpeakerEmbedding(
     embedding, use_auth_token=os.environ['TOKEN_HUGGINFACE']
 )
+# Change embedding_model
+# https://github.com/microsoft/UniSpeech/blob/main/downstreams/speaker_verification/models/ecapa_tdnn.py
+
 embedding_model.feature_extractor_ = segmentation.sincnet
 embedding_model.feature_extractor_.sampling_rate = weight_segmentation['hyper_parameters']['sample_rate']
 embedding_model.model_ = ECAPA_TDNN_SMALL(feat_dim=768, emb_dim=256, )
