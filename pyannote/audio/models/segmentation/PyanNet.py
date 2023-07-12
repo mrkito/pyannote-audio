@@ -80,18 +80,18 @@ class PyanNetBase(Model):
         "num_layers": 0,
         "nhead": 8,
     }
-    LINEAR_DEFAULTS = {"hidden_size": 128, "num_layers": 2}
+    LINEAR_DEFAULTS = {"hidden_size": 512, "num_layers": 2}
 
     def __init__(
-        self,
-        base_net: nn.Module,
-        base_feature_dim: int,
-        lstm: dict = None,
-        transformer: dict = None,
-        linear: dict = None,
-        sample_rate: int = 16000,
-        num_channels: int = 1,
-        task: Optional[Task] = None,
+            self,
+            base_net: nn.Module,
+            base_feature_dim: int,
+            lstm: dict = None,
+            transformer: dict = None,
+            linear: dict = None,
+            sample_rate: int = 16000,
+            num_channels: int = 1,
+            task: Optional[Task] = None,
     ):
         super().__init__(sample_rate=sample_rate, num_channels=num_channels, task=task)
 
@@ -141,7 +141,7 @@ class PyanNetBase(Model):
                         for i in range(num_layers)
                     ]
                 )
-            
+
             last_dim = lstm["hidden_size"] * (2 if lstm["bidirectional"] else 1)
 
         if linear["num_layers"] < 1:
@@ -151,11 +151,11 @@ class PyanNetBase(Model):
             [
                 nn.Linear(in_features, out_features)
                 for in_features, out_features in pairwise(
-                    [
-                        last_dim,
-                    ]
-                    + [self.hparams.linear["hidden_size"]] * self.hparams.linear["num_layers"]
-                )
+                [
+                    last_dim,
+                ]
+                + [self.hparams.linear["hidden_size"]] * self.hparams.linear["num_layers"]
+            )
             ]
         )
 
@@ -190,8 +190,9 @@ class PyanNetBase(Model):
         scores : (batch, frame, classes)
         """
 
-        outputs = self.sincnet(waveforms)
-        outputs = rearrange(outputs, "batch feature frame -> batch frame feature")
+        feats = self.sincnet(waveforms)
+        feats = rearrange(feats, "batch feature frame -> batch frame feature")
+        outputs = feats.clone()
 
         if self.hparams.transformer["num_layers"] > 0:
             outputs = self.transformer(outputs)
@@ -209,7 +210,9 @@ class PyanNetBase(Model):
             for linear in self.linear:
                 outputs = F.leaky_relu(linear(outputs))
 
-        return self.activation(self.classifier(outputs))
+        segmetation = self.activation(self.classifier(outputs))
+        return torch.cat([segmetation, feats], -1)
+
 
 
 class PyanNet(PyanNetBase):
@@ -227,9 +230,9 @@ class PyanNet(PyanNetBase):
     SINCNET_DEFAULTS = {"stride": 10}
 
     def __init__(
-        self,
-        sincnet: dict = None,
-        **kwargs,
+            self,
+            sincnet: dict = None,
+            **kwargs,
     ):
         sincnet = merge_dict(self.SINCNET_DEFAULTS, sincnet)
         sincnet["sample_rate"] = kwargs.get("sample_rate", 16000)
@@ -243,7 +246,7 @@ class WavLMWrapper(nn.Module):
         super().__init__()
         self.wavlm = wavlm
         self.use_weighted_sum = use_weighted_sum
-        
+
         if self.use_weighted_sum:
             self.sum_weights = nn.Parameter(torch.randn(self.wavlm.config.num_hidden_layers + 1))
 
