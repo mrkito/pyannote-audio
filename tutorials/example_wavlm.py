@@ -50,4 +50,4 @@ default_pipeline._embedding = embedding_model
 
 # inference
 
-default_pipeline("../tests/data/dev00.wav")
+default_pipeline("../tests/data/dev00.wav", return_embeddings=True)
