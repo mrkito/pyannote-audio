@@ -25,6 +25,7 @@
 import functools
 import itertools
 import math
+import textwrap
 import warnings
 from copy import copy
 from typing import Callable, Optional, Text, Union
@@ -101,7 +102,7 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
     >>> diarization = pipeline("/path/to/audio.wav", min_speakers=2, max_speakers=10)
 
     # perform diarization and get one representative embedding per speaker
-    >>> diarization, embeddings = pipeline("/path/to/audio.wav", return_embedding=True)
+    >>> diarization, embeddings = pipeline("/path/to/audio.wav", return_embeddings=True)
     >>> for s, speaker in enumerate(diarization.labels()):
     ...     # embeddings[s] is the embedding of speaker `speaker`
 
@@ -113,16 +114,16 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
     """
 
     def __init__(
-            self,
-            segmentation: PipelineModel = "pyannote/segmentation@2022.07",
-            segmentation_step: float = 0.1,
-            embedding: PipelineModel = "speechbrain/spkrec-ecapa-voxceleb@5c0be3875fda05e81f3c004ed8c7c06be308de1e",
-            embedding_exclude_overlap: bool = False,
-            clustering: str = "AgglomerativeClustering",
-            embedding_batch_size: int = 1,
-            segmentation_batch_size: int = 1,
-            der_variant: dict = None,
-            use_auth_token: Union[Text, None] = None,
+        self,
+        segmentation: PipelineModel = "pyannote/segmentation@2022.07",
+        segmentation_step: float = 0.1,
+        embedding: PipelineModel = "speechbrain/spkrec-ecapa-voxceleb@5c0be3875fda05e81f3c004ed8c7c06be308de1e",
+        embedding_exclude_overlap: bool = False,
+        clustering: str = "AgglomerativeClustering",
+        embedding_batch_size: int = 1,
+        segmentation_batch_size: int = 1,
+        der_variant: dict = None,
+        use_auth_token: Union[Text, None] = None,
     ):
         super().__init__()
 
@@ -227,12 +228,12 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
         return segmentations
 
     def get_embeddings(
-            self,
-            file,
-            binary_segmentations: SlidingWindowFeature,
-            feats: SlidingWindowFeature = None,
-            exclude_overlap: bool = False,
-            hook: Optional[Callable] = None,
+        self,
+        file,
+        binary_segmentations: SlidingWindowFeature,
+        feats: SlidingWindowFeature = None,
+        exclude_overlap: bool = False,
+        hook: Optional[Callable] = None,
     ):
         """Extract embeddings for each (chunk, speaker) pair
 
@@ -264,8 +265,8 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
             # `powerset` mode
             cache = file.get("training_cache/embeddings", dict())
             if ("embeddings" in cache) and (
-                    self._segmentation.model.specifications.powerset
-                    or (cache["segmentation.threshold"] == self.segmentation.threshold)
+                self._segmentation.model.specifications.powerset
+                or (cache["segmentation.threshold"] == self.segmentation.threshold)
             ):
                 return cache["embeddings"]
 
@@ -283,7 +284,7 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
 
             # zero-out frames with overlapping speech
             clean_frames = 1.0 * (
-                    np.sum(binary_segmentations.data, axis=2, keepdims=True) < 2
+                np.sum(binary_segmentations.data, axis=2, keepdims=True) < 2
             )
             clean_segmentations = SlidingWindowFeature(
                 binary_segmentations.data * clean_frames,
@@ -339,7 +340,6 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
                 fillvalue=(None, None),
             )
         else:
-
             batches = batchify(
                 iter_waveform_or_feats_and_mask(binary_segmentations),
                 batch_size=self.embedding_batch_size,
@@ -359,7 +359,9 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
             mask_batch = torch.vstack(masks)
             # (batch_size, num_frames) torch.Tensor
 
-            embedding_batch: np.ndarray = self._embedding(waveform_batch, masks=mask_batch)
+            embedding_batch: np.ndarray = self._embedding(
+                waveform_batch, masks=mask_batch
+            )
             # (batch_size, dimension) np.ndarray
 
             embedding_batches.append(embedding_batch)
@@ -387,10 +389,10 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
         return embeddings
 
     def reconstruct(
-            self,
-            segmentations: SlidingWindowFeature,
-            hard_clusters: np.ndarray,
-            count: SlidingWindowFeature,
+        self,
+        segmentations: SlidingWindowFeature,
+        hard_clusters: np.ndarray,
+        count: SlidingWindowFeature,
     ) -> SlidingWindowFeature:
         """Build final discrete diarization out of clustered segmentation
 
@@ -417,7 +419,7 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
         )
 
         for c, (cluster, (chunk, segmentation)) in enumerate(
-                zip(hard_clusters, segmentations)
+            zip(hard_clusters, segmentations)
         ):
             # cluster is (local_num_speakers, )-shaped
             # segmentation is (num_frames, local_num_speakers)-shaped
@@ -437,13 +439,13 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
         return self.to_diarization(clustered_segmentations, count)
 
     def apply(
-            self,
-            file: AudioFile,
-            num_speakers: int = None,
-            min_speakers: int = None,
-            max_speakers: int = None,
-            return_embeddings: bool = False,
-            hook: Optional[Callable] = None,
+        self,
+        file: AudioFile,
+        num_speakers: int = None,
+        min_speakers: int = None,
+        max_speakers: int = None,
+        return_embeddings: bool = False,
+        hook: Optional[Callable] = None,
     ) -> Annotation:
         """Apply speaker diarization
 
@@ -488,7 +490,7 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
         )
 
         segmentations = self.get_segmentations(file, hook=hook)
-        # undestand that segmentations = segmentations and feats
+        # understand that segmentations = segmentations and feats
         segmentations_classes = self._inferences['_segmentation'].model.classifier.out_features
         if segmentations_classes < segmentations.data.shape[-1]:
             feats = copy(segmentations)
@@ -554,12 +556,18 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
 
         # number of detected clusters is the number of different speakers
         num_different_speakers = centroids.shape[0]
-        # quick sanity check
+
+        # detected number of speakers can still be out of bounds
+        # (specifically, lower than `min_speakers`), since there could be too few embeddings
+        # to make enough clusters with a given minimum cluster size.
         if num_different_speakers < min_speakers or num_different_speakers > max_speakers:
-            warnings.warn(
-                f"Number of detected speakers ({num_different_speakers}) "
-                f"outside of [{min_speakers}, {max_speakers}] range"
-            )
+            warnings.warn(textwrap.dedent(
+                f"""The detected number of speakers ({num_different_speakers}) is outside
+                the given bounds [{min_speakers}, {max_speakers}]. This can happen if the
+                given audio file is too short to contain {min_speakers} or more speakers.
+                Try to lower the desired minimal number of speakers.
+                """
+            ))
 
         # during counting, we could possibly overcount the number of instantaneous
         # speakers due to segmentation errors, so we cap the maximum instantaneous number
