@@ -299,7 +299,6 @@ class SpeakerDiarization(SpeakerDiarizationMixin, Pipeline):
 
         def iter_waveform_or_feats_and_mask(segmentations, waveform_mode=True):
             """
-
             :param segmentations: wavs or feats
             :param waveform_mode: if True  out=wav_crops else feats
             """

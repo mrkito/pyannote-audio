@@ -83,15 +83,15 @@ class PyanNetBase(Model):
     LINEAR_DEFAULTS = {"hidden_size": 512, "num_layers": 2}
 
     def __init__(
-            self,
-            base_net: nn.Module,
-            base_feature_dim: int,
-            lstm: dict = None,
-            transformer: dict = None,
-            linear: dict = None,
-            sample_rate: int = 16000,
-            num_channels: int = 1,
-            task: Optional[Task] = None,
+        self,
+        base_net: nn.Module,
+        base_feature_dim: int,
+        lstm: dict = None,
+        transformer: dict = None,
+        linear: dict = None,
+        sample_rate: int = 16000,
+        num_channels: int = 1,
+        task: Optional[Task] = None,
     ):
         super().__init__(sample_rate=sample_rate, num_channels=num_channels, task=task)
 
